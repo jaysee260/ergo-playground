@@ -1,6 +1,6 @@
-# ErgoScript Playground
+# Ergo Playground
 
-A collection of miscellaneous scenarios and their respective transactions.
+A collection of miscellaneous scenarios implemented on the Ergo blockchain.
 
 | Scenario       | Description                                                                                                                 |
 |----------------|-----------------------------------------------------------------------------------------------------------------------------|
