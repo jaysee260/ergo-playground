@@ -80,7 +80,7 @@ object ChainedTxs {
     inputBox
   }
 
-  def createChainedTxs(conf: ErgoToolConfig, networkType: NetworkType): (String, String) = {
+  def sendChainedTxs(conf: ErgoToolConfig, networkType: NetworkType): (String, String) = {
     val ergoClient = RestApiErgoClient.create(conf.getNode, RestApiErgoClient.getDefaultExplorerUrl(networkType))
 
     val txJson = ergoClient.execute((ctx: BlockchainContext) => {
@@ -151,7 +151,7 @@ object ChainedTxs {
     val conf = ErgoToolConfig.load("ergo_config.json")
     val networkType = conf.getNode.getNetworkType
 
-    val txJson = createChainedTxs(conf, networkType)
+    val txJson = sendChainedTxs(conf, networkType)
     println(txJson)
   }
 }
