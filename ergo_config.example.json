@@ -1,0 +1,17 @@
+{
+  "node": {
+    "nodeApi": {
+      "apiUrl": "",
+      "apiKey": ""
+    },
+    "wallet": {
+      "mnemonic": "",
+      "password": "",
+      "mnemonicPassword": ""
+    },
+    "networkType": "TESTNET"
+  },
+  "parameters": {
+    "addressIndex": 0
+  }
+}
