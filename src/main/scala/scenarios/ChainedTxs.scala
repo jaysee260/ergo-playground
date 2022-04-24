@@ -31,10 +31,6 @@ object ChainedTxs {
     boxesToSpend
   }
 
-  def getInputsBoxesFromChain(): Unit = {
-
-  }
-
   def buildTx(
        ctx: BlockchainContext,
        inputs: List[InputBox],
@@ -54,6 +50,12 @@ object ChainedTxs {
     val pattern = """outputs":\s+\[\s+\{\s+"boxId":\s+"(.*)"""".r
     val outputBoxId = pattern.findAllIn(txJson).subgroups.head
     outputBoxId
+  }
+
+  // The tx id returned by ctx.sendTransaction has an extra pair of double quotes. ""txId123""
+  // This method cleans it up and returns an id with only 2 double quotes. "txId123"
+  def cleanUpTxId(txId: String): String = {
+    txId.split("\"")(1)
   }
 
   def buildNodeService(conf: ErgoToolConfig): UtxoApi = {
@@ -83,10 +85,11 @@ object ChainedTxs {
   def sendChainedTxs(conf: ErgoToolConfig, networkType: NetworkType): (String, String) = {
     val ergoClient = RestApiErgoClient.create(conf.getNode, RestApiErgoClient.getDefaultExplorerUrl(networkType))
 
-    val txJson = ergoClient.execute((ctx: BlockchainContext) => {
+    val txsJson = ergoClient.execute((ctx: BlockchainContext) => {
       val prover = buildProver(ctx, conf)
 
-      val tx1Json = {
+      // Build, sign and send tx 1.
+      val (tx1Id, tx1Json, tx1Inputs, tx1Outputs) = {
         // Get inputs for 1st tx
         // We want the final output to be 1 ERG; so we account for the txs fees we need to cover in the tx chain.
         val amountToSpend = Parameters.OneErg + Parameters.MinFee
@@ -109,17 +112,30 @@ object ChainedTxs {
         // Sign and send to network
         val signedTx1 = prover.sign(unsignedTx1)
         val tx1Id = ctx.sendTransaction(signedTx1)
-        signedTx1.toJson(true)
+        val tx1Json = signedTx1.toJson(true)
+
+        (cleanUpTxId(tx1Id), tx1Json, tx1Inputs.get().asScala.toList, List(tx1OutBox))
       }
 
+      // Give first tx a second to appear in mempool.
       Thread.sleep(1000)
 
-      val tx2Json = {
-        // Try to get input box for chained tx from mempool
-        // TODO: If not found, try to get it from the chain - maybe it got confirmed already.
-        //  If that doesn't work, throw an exception
+      // Build, sign and send tx 2.
+      // Tx 2 takes the output of Tx 1 as an input
+      // while both txs are still in the mempool.
+      val (tx2Id, tx2Json, tx2Inputs, tx2Outputs) = {
+        // Get unspent input with 0 confirmations
+
+        // Method 1 - Get from mempool
+        //  If your program is running in a context where it doesn't have a direct reference
+        //  to the output object from the previous tx, then you need the box id to get it from the mempool
         val chainedInputId = getOutputBoxIdFromTxJson(tx1Json)
         val chainedInput = getInputBoxFromMempool(ctx, buildNodeService(conf), chainedInputId)
+
+        // Method 2 - Use reference to output object from tx 1 to convert it to input to tx 2
+        //  But if your program builds the entire chain of txs at once, and has a direct reference
+        //  to the outputs of the previous tx, then you can reference them and call .convertToInputWith on them
+        // val chainedInput = tx1Outputs.head.convertToInputWith(tx1Id, 0)
 
         // Build output(s) for 2nd tx
         val tx2OutBox = ctx.newTxBuilder.outBoxBuilder
@@ -138,20 +154,22 @@ object ChainedTxs {
         // Sign and send to network
         val signedTx2 = prover.sign(unsignedTx2)
         val tx2Id = ctx.sendTransaction(signedTx2)
-        signedTx2.toJson(true)
+        val tx2Json = signedTx2.toJson(true)
+
+        (cleanUpTxId(tx2Id), tx2Json, List(chainedInput), List(tx2OutBox))
       }
 
       (tx1Json, tx2Json)
     })
 
-    txJson
+    txsJson
   }
 
   def main(args: Array[String]): Unit = {
     val conf = ErgoToolConfig.load("ergo_config.json")
     val networkType = conf.getNode.getNetworkType
 
-    val txJson = sendChainedTxs(conf, networkType)
-    println(txJson)
+    val txsJson = sendChainedTxs(conf, networkType)
+    println(txsJson)
   }
 }
